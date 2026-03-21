@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raven SaaS | Media Downloader</title>
+    <style>
+    :root { 
+        --accent: #38bdf8; 
+        --bg: #0f172a; 
+        --card: #1e293b; 
+        --text-dim: #94a3b8;
+    }
+
+    body { 
+        background: var(--bg); 
+        color: white; 
+        font-family: sans-serif; 
+        text-align: center; 
+        padding: 20px; 
+    }
+
+    .card { 
+        background: var(--card); 
+        padding: 25px; 
+        border-radius: 16px; 
+        max-width: 450px; 
+        margin: auto; 
+    }
+
+    h1 { color: var(--accent); margin-bottom: 5px; }
+    .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 20px; }
+    
+    /* That specific dark input you liked */
+    input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            border: 2px solid #334155; 
+            background: #0f172a; 
+            color: white; 
+            box-sizing: border-box; 
+            outline: none;
+    }
+    
+    input:focus { border-color: var(--accent); }
+    
+    .main-btn { 
+            background: var(--accent); 
+            color: #0f172a; 
+            padding: 12px; 
+            border: none; 
+            border-radius: 8px; 
+            width: 100%; 
+            font-weight: bold; 
+            cursor: pointer;
+    }
+    
+    .tab-cont { display: flex; gap: 10px; margin: 20px 0; }
+    .tab { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: white; cursor: pointer; }
+    .active-tab { background: var(--accent); color: #0f172a; font-weight: bold; }
+    
+    /* Layout for MBs on the right */
+    .btn-dl { 
+        width: 100%; padding: 14px; margin-top: 10px; background: #334155; 
+        color: white; border: 1px solid #475569; border-radius: 10px; 
+        display: flex; justify-content: space-between; align-items: center; 
+    }
+    .btn-dl span { color: var(--accent); font-weight: bold; font-size: 0.8rem; }
+
+    .progress-box { width: 100%; background: #0f172a; height: 12px; border-radius: 10px; margin-top: 25px; display: none; overflow: hidden; border: 1px solid #334155; }
+    .bar { width: 0%; height: 100%; background: var(--accent); transition: 0.4s; }
+</style>
+
+<body>
+    <div class="card">
+        <h1 style="text-align: center;">🐦Raven: Universal Downloader</h1>
+        <p class="subtitle">Supports Instagram, TikTok, X(Twitter), Facebook, Reddit & Pinterest</p>
+        
+        <input type="text" id="url" placeholder="Paste your link here...">
+        <button class="main-btn" onclick="fetchInfo()">Get Options</button>
+        
+        <h3 id="title" style="margin-top:25px;"></h3>
+        
+        <div id="ui-controls" style="display:none;">
+            <div class="tab-cont">
+                <button id="v-tab" class="tab active-tab" onclick="toggleMode('v')">🎬 Video</button>
+                <button id="a-tab" class="tab" onclick="toggleMode('a')">🎵 Audio</button>
+            </div>
+            <div id="options-list"></div>
+        </div>
+
+        <div class="progress-box" id="p-box"><div class="bar" id="p-bar"></div></div>
+        <p id="p-text" style="color:var(--accent); font-weight:bold; margin-top:10px;"></p>
+        
+        <button id="reset-btn" class="main-btn" style="display: none; margin-top: 20px; background: #64748b; color: white;" onclick="resetPage()">
+            ⬅️ Reset</button>
+            
+            <hr style="border: 0; border-top: 1px solid #334155; margin: 25px 0;">
+            <button class="tab" style="width:100%; border-color: #64748b; color: #94a3b8;" onclick="loadHistory()">
+                🕒 Show Recent Downloads
+            </button>
+            <div id="history-list" style="margin-top: 15px; text-align: left; font-size: 0.85rem; color: #94a3b8;"></div>
+        
+    </div>
+<script>
+        let mediaData = null;
+        let mode = 'v';
+
+        function fetchInfo() {
+            const url = document.getElementById('url').value;
+            if(!url) return alert("Paste a link first!");
+            document.getElementById('title').innerText = "Raven is searching...";
+            fetch('/get_info', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url: url})
+            }).then(r => r.json()).then(data => {
+                if(data.status === 'success') {
+                    mediaData = data;
+                    document.getElementById('title').innerText = data.title;
+                    document.getElementById('ui-controls').style.display = 'block';
+                    render();
+                } else { alert("Error: " + data.message); }
+            });
+        }
+
+        function toggleMode(m) {
+            mode = m;
+            document.getElementById('v-tab').className = m === 'v' ? 'tab active-tab' : 'tab';
+            document.getElementById('a-tab').className = m === 'a' ? 'tab active-tab' : 'tab';
+            render();
+        }
+
+        function render() {
+            const list = document.getElementById('options-list');
+            list.innerHTML = "";
+            const items = mode === 'v' ? mediaData.v : mediaData.a;
+            items.forEach(item => {
+                list.innerHTML += `
+                    <button class="btn-dl" onclick="startDl('${item.id}')">
+                        <div>${mode === 'v' ? '🎬' : '🎵'} ${item.res}</div>
+                        <span>${item.size}</span>
+                    </button>`;
+            });
+        }
+
+        function startDownload() {
+        const formData = new FormData(document.getElementById('downloadForm'));
+        const statusDiv = document.getElementById('status');
+        
+        statusDiv.innerHTML = "🚀 Raven is fetching your file...";
+    
+        fetch('/download', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob(); // 1. We tell JS to expect a "Blob" (the file)
+        })
+        .then(blob => {
+            // 2. Create a temporary "Secret Link" in the browser memory
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // 3. Set the filename (Raven will handle the extension)
+            a.download = "Raven_Download.mp4"; 
+            
+            // 4. "Click" the link automatically to start the save
+            document.body.appendChild(a);
+            a.click();
+            
+            // 5. Clean up
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            statusDiv.innerHTML = "✅ Download Complete! Check your Gallery.";
+        })
+        .catch(error => {
+            statusDiv.innerHTML = "❌ Error: " + error.message;
+        });
+        }
+
+        function trackProgress() {
+            const interval = setInterval(() => {
+                fetch('/get_progress').then(r => r.json()).then(data => {
+                    document.getElementById('p-bar').style.width = data.percent + "%";
+                    document.getElementById('p-text').innerText = "Raven Download: " + data.percent + "%";
+                    if(data.percent === "100") {
+                        clearInterval(interval);
+                        document.getElementById('p-text').innerText = "✅ Saved to RavenDownloader folder!";
+                        document.getElementById('reset-btn').style.display = 'block';//show the button to reset the page🙂‍↕️....
+                    }
+                });
+            }, 1000);
+        }
+        
+        function resetPage() {
+    // 1. Clear the input and titles
+    document.getElementById('url').value = "";
+    document.getElementById('title').innerText = "";
+    
+    // 2. Hide the UI controls and progress
+    document.getElementById('ui-controls').style.display = 'none';
+    document.getElementById('p-box').style.display = 'none';
+    document.getElementById('p-text').innerText = "";
+    
+    // 3. Hide this button again
+    document.getElementById('reset-btn').style.display = 'none';
+    
+    // 4. Reset progress bar width
+    document.getElementById('p-bar').style.width = "0%";
+    
+    loadHistory();
+    
+    }
+    
+    function loadHistory() {
+    const historyDiv = document.getElementById('history-list');
+    historyDiv.innerHTML = "Loading history...";
+
+    fetch('/get_history')
+        .then(res => res.json())
+        .then(files => {
+            if (files.length === 0) {
+                historyDiv.innerHTML = "No recent downloads found.";
+                return;
+            }
+            historyDiv.innerHTML = "";
+            files.forEach(file => {
+                // Create a small 'pill' for each filename
+                historyDiv.innerHTML += `
+                    <div style="background: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 5px; border-left: 3px solid var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ✅ ${file}
+                    </div>`;
+            });
+        });
+    }
+        
+    </script>
+</body>
+</html>
